@@ -1559,6 +1559,7 @@ namespace larg4 {
 
     // calculate solid angle:
     double solid_angle = 0;
+    double solid_angle_full = 0;
     // Arapucas
     if (optical_detector_type == 0) {
       // get scintillation point coordinates relative to arapuca window centre
@@ -1567,6 +1568,7 @@ namespace larg4 {
                                               std::abs(ScintPoint.Z() - OpDetPoint.Z())};
       // calculate solid angle
       solid_angle = Rectangle_SolidAngle(detPoint, ScintPoint_rel);
+      solid_angle_full = Rectangle_SolidAngleFull(detPoint, ScintPoint_rel);
     }
     // PMTs
     else if (optical_detector_type == 1) {
@@ -1576,6 +1578,7 @@ namespace larg4 {
       double h =  std::abs(ScintPoint[0] - OpDetPoint[0]);
       // Solid angle of a disk
       solid_angle = Disk_SolidAngle(d, h, fradius);
+      solid_angle_full = Disk_SolidAngleFull(d, h, fradius);
     }
     else {
       std::cout << "Error: Invalid optical detector type. 0 = rectangular, 1 = disk" << std:: endl;
@@ -1583,6 +1586,23 @@ namespace larg4 {
 
     // calculate number of photons hits by geometric acceptance: accounting for solid angle and LAr absorbtion length
     double hits_geo = std::exp(-1.*distance / fL_abs_vuv) * (solid_angle / (4 * CLHEP::pi)) * Nphotons_created;
+    double hits_geo_full = std::exp(-1.*distance / fL_abs_vuv) * (solid_angle_full / (4 * CLHEP::pi)) * Nphotons_created;
+    if(optical_detector_type==0 &&
+       !isApproximatelyEqual(solid_angle, solid_angle_full, 0.01*solid_angle_full)){
+      std::cout << "\nVUVoptical_detector_type: (0rec, 1disk):\t" << optical_detector_type << "\n";
+      std::cout << "solid_angle:\t" << solid_angle << "\n";
+      std::cout << "solid_angle_full:\t" << solid_angle_full << "\n";
+      std::cout << "hits_geo:\t" << hits_geo << "\n";
+      std::cout << "hits_geo_full:\t" << hits_geo_full << "\n";
+    }
+    if(optical_detector_type==1 &&
+       !isApproximatelyEqual(solid_angle, solid_angle_full, 0.01*solid_angle_full)){
+      std::cout << "\nVUVoptical_detector_type: (0rec, 1disk):\t" << optical_detector_type << "\n";
+      std::cout << "solid_angle:\t" << solid_angle << "\n";
+      std::cout << "solid_angle_full:\t" << solid_angle_full << "\n";
+      std::cout << "hits_geo:\t" << hits_geo << "\n";
+      std::cout << "hits_geo_full:\t" << hits_geo_full << "\n";
+    }
 
     // apply Gaisser-Hillas correction for Rayleigh scattering distance
     // and angular dependence offset angle bin
@@ -1625,7 +1645,6 @@ namespace larg4 {
        (std::abs(ScintPoint[0]) <= fplane_depth)) {
       return 0;
     }
-
     // set plane_depth for correct TPC:
     double plane_depth;
     if (ScintPoint[0] < 0) {
@@ -1642,6 +1661,7 @@ namespace larg4 {
                                                  std::abs(ScintPoint.Z() - fcathode_centre[2])};
     // calculate solid angle of cathode from the scintillation point
     double solid_angle_cathode = Rectangle_SolidAngle(cathode_plane, ScintPoint_relative);
+    double solid_angle_cathode_full = Rectangle_SolidAngleFull(cathode_plane, ScintPoint_relative);
     // calculate distance and angle between ScintPoint and hotspot
     // vast majority of hits in hotspot region directly infront of scintpoint,
     // therefore consider attenuation for this distance and on axis GH instead of for the centre coordinate
@@ -1651,6 +1671,22 @@ namespace larg4 {
     // calculate hits on cathode plane via geometric acceptance
     double cathode_hits_geo = std::exp(-1.*distance_cathode / fL_abs_vuv) *
       (solid_angle_cathode / (4.*CLHEP::pi)) * Nphotons_created;
+    double cathode_hits_geo_full = std::exp(-1.*distance_cathode / fL_abs_vuv) *
+      (solid_angle_cathode_full / (4.*CLHEP::pi)) * Nphotons_created;
+
+    if(!isApproximatelyEqual(solid_angle_cathode, solid_angle_cathode_full, 0.01*solid_angle_cathode_full)){
+      std::cout << "\nCathode " << "\n";
+      std::cout << "ScintPoint.X():\t" << ScintPoint.X() << "\t";
+      std::cout << "plane_depth:\t" << plane_depth << "\n";
+      std::cout << "ScintPoint_relative:\t"
+                << ScintPoint_relative[0] << ", " << ScintPoint_relative[1] << ", " << ScintPoint_relative[2] << "\n";
+      std::cout << "cathode_plane:\t" << cathode_plane.h << ", " << cathode_plane.w << "\n";
+      std::cout << "solid_angle_cathode:\t" << solid_angle_cathode << "\n";
+      std::cout << "solid_angle_cathode_full:\t" << solid_angle_cathode_full << "\n";
+      std::cout << "cathode_hits_geo:\t" << cathode_hits_geo << "\n";
+      std::cout << "cathode_hits_geo_full:\t" << cathode_hits_geo_full << "\n";
+    }
+
     // apply Gaisser-Hillas correction for Rayleigh scattering distance and angular dependence
     // offset angle bin
     const size_t j = (theta_cathode / fdelta_angulo);// TODO:: std::round?
@@ -1667,6 +1703,7 @@ namespace larg4 {
 
     // calculate solid angle of optical channel
     double solid_angle_detector = 0;
+    double solid_angle_detector_full = 0;
     // rectangular aperture
     if (optical_detector_type == 0) {
       // get hotspot coordinates relative to detpoint
@@ -1675,6 +1712,7 @@ namespace larg4 {
                                                  std::abs(hotspot.Z() - OpDetPoint.Z())};
       // calculate solid angle
       solid_angle_detector = Rectangle_SolidAngle(detPoint, emission_relative);
+      solid_angle_detector_full = Rectangle_SolidAngleFull(detPoint, emission_relative);
     }
     // disk aperture
     else if (optical_detector_type == 1) {
@@ -1684,6 +1722,7 @@ namespace larg4 {
       double h =  std::abs(hotspot[0] - OpDetPoint[0]);
       // calculate solid angle
       solid_angle_detector = Disk_SolidAngle(d, h, fradius);
+      solid_angle_detector_full = Disk_SolidAngleFull(d, h, fradius);
     }
     else {
       std::cout << "Error: Invalid optical detector type. 0 = rectangular, 1 = disk" << std::endl;
@@ -1691,6 +1730,24 @@ namespace larg4 {
 
     // calculate number of hits via geometeric acceptance
     double hits_geo = (solid_angle_detector / (2.*CLHEP::pi)) * cathode_hits_rec; // 2*pi due to presence of reflective foils
+    double hits_geo_full = (solid_angle_detector_full / (2.*CLHEP::pi)) * cathode_hits_rec; // 2*pi due to presence of reflective foils
+
+    if(optical_detector_type==0 &&
+       !isApproximatelyEqual(solid_angle_detector, solid_angle_detector_full, 0.01*solid_angle_detector_full)){
+      std::cout << "\nVISoptical_detector_type: (0rec, 1disk):\t" << optical_detector_type << "\n";
+      std::cout << "solid_angle_detector:\t" << solid_angle_detector << "\n";
+      std::cout << "solid_angle_detector_full:\t" << solid_angle_detector_full << "\n";
+      std::cout << "hits_geo:\t" << hits_geo << "\n";
+      std::cout << "hits_geo_full:\t" << hits_geo_full << "\n";
+    }
+    if(optical_detector_type==1 &&
+       !isApproximatelyEqual(solid_angle_detector, solid_angle_detector_full, 0.01*solid_angle_detector_full)){
+      std::cout << "\nVISoptical_detector_type: (0rec, 1disk):\t" << optical_detector_type << "\n";
+      std::cout << "solid_angle_detector:\t" << solid_angle_detector << "\n";
+      std::cout << "solid_angle_detector_full:\t" << solid_angle_detector_full << "\n";
+      std::cout << "hits_geo:\t" << hits_geo << "\n";
+      std::cout << "hits_geo_full:\t" << hits_geo_full << "\n";
+    }
 
     // calculate distances and angles for application of corrections
     // distance to hotspot
@@ -1943,6 +2000,34 @@ namespace larg4 {
   }
 
 
+  constexpr double OpFastScintillation::Disk_SolidAngleFull(const double d, const double h,
+                                                        const double b)
+  {
+    if(b <= 0. || d < 0. || h <= 0.) return 0.;
+    const double leg2 = (b + d) * (b + d);
+    const double aa = std::sqrt(h * h / (h * h + leg2));
+    if(isApproximatelyZero(d)) {
+      return 2. * CLHEP::pi * (1. - aa);
+    }
+    double bb = 2.*std::sqrt(b * d / (h * h + leg2));
+    double cc = 4. * b * d / leg2;
+
+    if(isDefinitelyGreaterThan(d,b)) {
+      return 2.*aa*(std::sqrt(1.-cc)*boost::math::ellint_3(bb,cc) -
+                    boost::math::ellint_1(bb));
+    }
+    if(isDefinitelyLessThan(d,b)) {
+      return 2.* CLHEP::pi -
+        2.*aa*(boost::math::ellint_1(bb) +
+               std::sqrt(1.-cc)*boost::math::ellint_3(bb,cc));
+    }
+    if(isApproximatelyEqual(d,b)) {
+      return CLHEP::pi - 2.*aa*boost::math::ellint_1(bb);
+    }
+    return 0.;
+  }
+
+
   // solid angle of rectangular aperture
   // TODO: what's up with all of that times 2, divided by 2?
   constexpr double OpFastScintillation::Rectangle_SolidAngle(const double a, const double b,
@@ -2006,6 +2091,75 @@ namespace larg4 {
                           Rectangle_SolidAngle(2 * (o.h - A), 2 * B, v[0]) +
                           Rectangle_SolidAngle(2 * A, 2 * (B + o.w), v[0]) -
                           Rectangle_SolidAngle(2 * A, 2 * B, v[0])) / 4.0;
+      return to_return;
+    }
+    // error message if none of these cases, i.e. something has gone wrong!
+    // std::cout << "Warning: invalid solid angle call." << std::endl;
+    return 0.0;
+  }
+
+  // TODO: what's up with all of that times 2, divided by 2?
+  constexpr double OpFastScintillation::Rectangle_SolidAngleFull(const double a, const double b,
+                                                             const double d)
+  {
+    double aa = a / (2.0 * d);
+    double bb = b / (2.0 * d);
+    double aux = (1 + aa * aa + bb * bb) / ((1. + aa * aa) * (1. + bb * bb));
+    return 4 * std::acos(std::sqrt(aux));
+    // return 4 * fast_acos(std::sqrt(aux));
+  }
+
+
+  // TODO: allow greater tolerance in comparisons, see note above on Disk_SolidAngle()
+  constexpr double OpFastScintillation::Rectangle_SolidAngleFull(const dims o,
+                                                             const std::array<double, 3> v)
+  {
+    // v is the position of the track segment with respect to
+    // the center position of the arapuca window
+
+    // arapuca plane fixed in x direction
+    if(isApproximatelyZero(v[1]) &&
+       isApproximatelyZero(v[2])) {
+      return Rectangle_SolidAngleFull(o.h, o.w, v[0]);
+    }
+    if(isDefinitelyGreaterThan(v[1], o.h/2.0) &&
+       isDefinitelyGreaterThan(v[2], o.w/2.0)) {
+      double A = v[1] - o.h / 2.0;
+      double B = v[2] - o.w / 2.0;
+      double to_return = (Rectangle_SolidAngleFull(2 * (A + o.h), 2 * (B + o.w), v[0]) -
+                          Rectangle_SolidAngleFull(2 * A, 2 * (B + o.w), v[0]) -
+                          Rectangle_SolidAngleFull(2 * (A + o.h), 2 * B, v[0]) +
+                          Rectangle_SolidAngleFull(2 * A, 2 * B, v[0])) / 4.0;
+      return to_return;
+    }
+    if((v[1] <= o.h / 2.0) &&
+       (v[2] <= o.w / 2.0)) {
+      double A = -v[1] + o.h / 2.0;
+      double B = -v[2] + o.w / 2.0;
+      double to_return = (Rectangle_SolidAngleFull(2 * (o.h - A), 2 * (o.w - B), v[0]) +
+                          Rectangle_SolidAngleFull(2 * A, 2 * (o.w - B), v[0]) +
+                          Rectangle_SolidAngleFull(2 * (o.h - A), 2 * B, v[0]) +
+                          Rectangle_SolidAngleFull(2 * A, 2 * B, v[0])) / 4.0;
+      return to_return;
+    }
+    if(isDefinitelyGreaterThan(v[1], o.h/2.0) &&
+       (v[2] <= o.w / 2.0)) {
+      double A = v[1] - o.h / 2.0;
+      double B = -v[2] + o.w / 2.0;
+      double to_return = (Rectangle_SolidAngleFull(2 * (A + o.h), 2 * (o.w - B), v[0]) -
+                          Rectangle_SolidAngleFull(2 * A, 2 * (o.w - B), v[0]) +
+                          Rectangle_SolidAngleFull(2 * (A + o.h), 2 * B, v[0]) -
+                          Rectangle_SolidAngleFull(2 * A, 2 * B, v[0])) / 4.0;
+      return to_return;
+    }
+    if((v[1] <= o.h / 2.0) &&
+       isDefinitelyGreaterThan(v[2], o.w/2.0)) {
+      double A = -v[1] + o.h / 2.0;
+      double B = v[2] - o.w / 2.0;
+      double to_return = (Rectangle_SolidAngleFull(2 * (o.h - A), 2 * (B + o.w), v[0]) -
+                          Rectangle_SolidAngleFull(2 * (o.h - A), 2 * B, v[0]) +
+                          Rectangle_SolidAngleFull(2 * A, 2 * (B + o.w), v[0]) -
+                          Rectangle_SolidAngleFull(2 * A, 2 * B, v[0])) / 4.0;
       return to_return;
     }
     // error message if none of these cases, i.e. something has gone wrong!

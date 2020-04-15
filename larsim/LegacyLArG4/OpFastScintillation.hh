@@ -351,6 +351,12 @@ namespace larg4 {
     // solid angle of circular aperture calculation functions
     constexpr double Disk_SolidAngle(const double d, const double h, const double b);
 
+    constexpr double Rectangle_SolidAngleFull(const double a, const double b,
+                                          const double d);
+    constexpr double Rectangle_SolidAngleFull(const dims o, const std::array<double, 3> v);
+    // solid angle of circular aperture calculation functions
+    constexpr double Disk_SolidAngleFull(const double d, const double h, const double b);
+
     //For VUV semi-analytic hits
     constexpr G4double Gaisser_Hillas(const double x, const double *par);
     bool fUseNhitsModel;
