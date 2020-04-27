@@ -35,6 +35,7 @@ art_make(LIB_LIBRARIES
            ${G4PROCESSES}
            ${G4TRACK}
            ${G4RUN}
+           ${TBB}
          MODULE_LIBRARIES
            larsim_LegacyLArG4
            larsim_MCCheater_ParticleInventoryService_service

@@ -241,6 +241,8 @@ namespace larg4 {
         int type_i = -1;
         if(strcmp(geo->OpDetGeoFromOpDet(i).Shape()->IsA()->GetName(), "TGeoBBox") == 0) {
           type_i = 0;//Arapucas
+          detPoint.h = geo->OpDetGeoFromOpDet(i).Height();
+          detPoint.w = geo->OpDetGeoFromOpDet(i).Length();
           fOpDetLength.push_back(geo->OpDetGeoFromOpDet(i).Length());
           fOpDetHeight.push_back(geo->OpDetGeoFromOpDet(i).Height());
         }
@@ -761,13 +763,20 @@ namespace larg4 {
       if(!Visibilities && !pvs->UseNhitsModel()) continue;
 
       // detected photons from direct light
-      std::map<size_t, int> DetectedNum;
+      // std::map<size_t, int> DetectedNum;
+      p_map DetectedNum;
       if(Visibilities && !pvs->UseNhitsModel()) {
         int DetThis = 0;
         for(size_t OpDet = 0; OpDet != NOpChannels; ++OpDet) {
           if(!isOpDetInSameTPC(ScintPoint[0], fOpDetCenter.at(OpDet)[0])) continue;
           DetThis = std::round(G4Poisson(Visibilities[OpDet] * Num));
-          if(DetThis > 0) DetectedNum[OpDet] = DetThis;
+          if(DetThis > 0) {
+            // DetectedNum[OpDet] = DetThis;
+            p_map::accessor ac;
+            DetectedNum.insert(ac, OpDet);
+            ac->second = DetThis;
+            ac.release();
+          }
         }
       }
       else{
@@ -775,14 +784,21 @@ namespace larg4 {
       }
 
       // detected photons from reflected light
-      std::map<size_t, int> ReflDetectedNum;
+      // std::map<size_t, int> ReflDetectedNum;
+      p_map ReflDetectedNum;
       if(pvs->StoreReflected()) {
         if (!pvs->UseNhitsModel()) {
           int ReflDetThis = 0;
           for(size_t OpDet = 0; OpDet != NOpChannels; ++OpDet) {
             if(!isOpDetInSameTPC(ScintPoint[0], fOpDetCenter.at(OpDet)[0])) continue;
             ReflDetThis = std::round(G4Poisson(ReflVisibilities[OpDet] * Num));
-            if(ReflDetThis > 0) ReflDetectedNum[OpDet] = ReflDetThis;
+            if(ReflDetThis > 0) {
+              // ReflDetectedNum[OpDet] = ReflDetThis;
+              p_map::accessor ac;
+              ReflDetectedNum.insert(ac, OpDet);
+              ac->second = ReflDetThis;
+              ac.release();
+            }
           }
         }
         else{
@@ -796,8 +812,10 @@ namespace larg4 {
         // Only do the reflected loop if we have reflected visibilities
         if (Reflected && !pvs->StoreReflected()) continue;
 
-        std::map<size_t, int>::const_iterator itstart;
-        std::map<size_t, int>::const_iterator itend;
+        // std::map<size_t, int>::const_iterator itstart;
+        // std::map<size_t, int>::const_iterator itend;
+        p_map::const_iterator itstart;
+        p_map::const_iterator itend;
         if (Reflected) {
           itstart = ReflDetectedNum.begin();
           itend   = ReflDetectedNum.end();
@@ -1513,34 +1531,43 @@ namespace larg4 {
     }
   }
 
-  void OpFastScintillation::detectedDirectHits(std::map<size_t, int>& DetectedNum,
+  void OpFastScintillation::detectedDirectHits(p_map& DetectedNum,
                                                const double Num,
                                                const std::array<double, 3> ScintPoint)
   {
-    for(size_t OpDet = 0; OpDet != NOpChannels; ++OpDet) {
-      int DetThis = 0;
-      if(!isOpDetInSameTPC(ScintPoint[0], fOpDetCenter.at(OpDet)[0])) continue;
+    // tbb::parallel_for(static_cast<std::size_t>(0),static_cast<std::size_t>(NOpChannels),
+    //                   [&](size_t& OpDet){
 
-      fydimension = fOpDetHeight.at(OpDet);
-      fzdimension = fOpDetLength.at(OpDet);
-      // set detector struct for solid angle function
-      detPoint.h = fydimension; detPoint.w = fzdimension;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, NOpChannels, NOpChannels/4),
+                      [&](tbb::blocked_range<size_t> r){
+                        for (size_t OpDet=r.begin(); OpDet<r.end(); ++OpDet){
+//    for(size_t OpDet = 0; OpDet != NOpChannels; ++OpDet) {
+      int DetThis = 0;
+      if(!isOpDetInSameTPC(ScintPoint[0], fOpDetCenter.at(OpDet)[0])) DetThis = 0;
+
+      else{
       // TODO: potentially loosing photons:
       //       Num is double but gets casted to int in the function below
       // ~icaza
       DetThis = VUVHits(Num, ScintPoint,
                         fOpDetCenter.at(OpDet), fOpDetType.at(OpDet));
       if(DetThis > 0) {
-        DetectedNum[OpDet] = DetThis;
+        // DetectedNum[OpDet] = DetThis;
+        p_map::accessor ac;
+        DetectedNum.insert(ac, OpDet);
+        ac->second = DetThis;
+        ac.release();
         //   mf::LogInfo("OpFastScintillation") << "FastScint: " <<
-        //   //   it->second<<" " << Num << " " << DetThisPMT;
-        //det_photon_ctr += DetThisPMT; // CASE-DEBUG DO NOT REMOVE THIS COMMENT
+        //   //   it->second<<" " << Num << " " << DetThis;
+        //det_photon_ctr += DetThis; // CASE-DEBUG DO NOT REMOVE THIS COMMENT
       }
-    }
+      }
+                        }
+                      }); // tbb::parallel_for(static_cast<std::size_t>(0),static_cast<std::size_t>(NOpChannels)
   }
 
 
-  void OpFastScintillation::detectedReflecHits(std::map<size_t, int>& ReflDetectedNum,
+  void OpFastScintillation::detectedReflecHits(p_map& ReflDetectedNum,
                                                const double Num,
                                                const std::array<double, 3> ScintPoint)
   {
@@ -1583,10 +1610,19 @@ namespace larg4 {
     const double cathode_hits_rec = GH_correction * cathode_hits_geo;
     const std::array<double, 3> hotspot = {plane_depth, ScintPoint[1], ScintPoint[2]};
 
-    for(size_t OpDet = 0; OpDet != NOpChannels; ++OpDet) {
-      int ReflDetThis = 0;
-      if(!isOpDetInSameTPC(ScintPoint[0], fOpDetCenter.at(OpDet)[0])) continue;
+    // for(size_t OpDet = 0; OpDet != NOpChannels; ++OpDet) {
 
+    // tbb::parallel_for(static_cast<std::size_t>(0),static_cast<std::size_t>(NOpChannels),
+    //                   [&](size_t& OpDet){
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, NOpChannels, NOpChannels/4),
+                      [&](tbb::blocked_range<size_t> r){
+                        for (size_t OpDet=r.begin(); OpDet<r.end(); ++OpDet){
+
+      int ReflDetThis = 0;
+      if(!isOpDetInSameTPC(ScintPoint[0], fOpDetCenter.at(OpDet)[0])) ReflDetThis = 0;
+
+      else{
       // TODO: potentially loosing photons:
       //       Num is double but gets casted to int in the function below
       // ~icaza
@@ -1594,9 +1630,15 @@ namespace larg4 {
                             fOpDetCenter.at(OpDet), fOpDetType.at(OpDet),
                             cathode_hits_rec, hotspot);
       if(ReflDetThis > 0) {
-        ReflDetectedNum[OpDet] = ReflDetThis;
+        // ReflDetectedNum[OpDet] = ReflDetThis;
+        p_map::accessor ac;
+        ReflDetectedNum.insert(ac, OpDet);
+        ac->second = ReflDetThis;
+        ac.release();
       }
-    }
+      }
+     }
+    }); // tbb::parallel_for(static_cast<std::size_t>(0),static_cast<std::size_t>(NOpChannels)
   }
 
   // VUV semi-analytic hits calculation

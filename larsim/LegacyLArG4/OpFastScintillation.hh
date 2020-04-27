@@ -98,6 +98,10 @@
 #include "TF1.h"
 #include "TVector3.h"
 
+#include "tbb/tbb.h"
+#include "tbb/concurrent_hash_map.h"
+typedef tbb::concurrent_hash_map<size_t, int> p_map;
+
 class G4EmSaturation;
 class G4Step;
 class G4Track;
@@ -285,10 +289,11 @@ namespace larg4 {
     G4bool scintillationByParticleType;
 
   private:
-    void detectedDirectHits(std::map<size_t, int>& DetectedNum,
+
+    void detectedDirectHits(p_map& DetectedNum,
                             const double Num,
                             const std::array<double, 3> ScintPoint);
-    void detectedReflecHits(std::map<size_t, int>& ReflDetectedNum,
+    void detectedReflecHits(p_map& ReflDetectedNum,
                             const double Num,
                             const std::array<double, 3> ScintPoint);
 
@@ -391,7 +396,7 @@ namespace larg4 {
 
     // Optical detector properties for semi-analytic hits
     // int foptical_detector_type;  // unused
-    double fydimension, fzdimension, fradius;
+    double fradius;
     dims detPoint, cathode_plane;
     int fdelta_angulo, fL_abs_vuv;
     std::vector<std::array<double, 3>> fOpDetCenter;
