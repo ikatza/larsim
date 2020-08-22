@@ -251,6 +251,8 @@ namespace larg4 {
         geo::OpDetGeo const& opDet = geom.OpDetGeoFromOpDet(i);
         fOpDetCenter.push_back(opDet.GetCenter());
         if (opDet.isBar()) {
+          detPoint.h = opDet.Height();
+          detPoint.w = opDet.Length();
           fOpDetType.push_back(0); //Arapucas
           fOpDetLength.push_back(opDet.Length());
           fOpDetHeight.push_back(opDet.Height());
@@ -733,12 +735,17 @@ namespace larg4 {
       if (!Visibilities && !usesSemiAnalyticModel()) continue;
 
       // detected photons from direct light
-      std::map<size_t, int> DetectedNum;
+      p_map DetectedNum;
       if (Visibilities && !usesSemiAnalyticModel()) {
         for (size_t const OpDet : util::counter(NOpChannels)) {
           if (fOpaqueCathode && !isOpDetInSameTPC(ScintPoint, fOpDetCenter.at(OpDet))) continue;
           int const DetThis = std::round(G4Poisson(Visibilities[OpDet] * Num));
-          if (DetThis > 0) DetectedNum[OpDet] = DetThis;
+          if(DetThis > 0) {
+            p_map::accessor ac;
+            DetectedNum.insert(ac, OpDet);
+            ac->second = DetThis;
+            ac.release();
+          }
         }
       }
       else {
@@ -746,13 +753,18 @@ namespace larg4 {
       }
 
       // detected photons from reflected light
-      std::map<size_t, int> ReflDetectedNum;
+      p_map ReflDetectedNum;
       if (fPVS->StoreReflected()) {
         if (!usesSemiAnalyticModel()) {
           for (size_t const OpDet : util::counter(NOpChannels)) {
             if (fOpaqueCathode && !isOpDetInSameTPC(ScintPoint, fOpDetCenter.at(OpDet))) continue;
-            int const ReflDetThis = std::round(G4Poisson(ReflVisibilities[OpDet] * Num));
-            if (ReflDetThis > 0) ReflDetectedNum[OpDet] = ReflDetThis;
+            const int ReflDetThis = std::round(G4Poisson(ReflVisibilities[OpDet] * Num));
+            if(ReflDetThis > 0) {
+              p_map::accessor ac;
+              ReflDetectedNum.insert(ac, OpDet);
+              ac->second = ReflDetThis;
+              ac.release();
+            }
           }
         }
         else {
@@ -766,8 +778,8 @@ namespace larg4 {
         // Only do the reflected loop if we have reflected visibilities
         if (Reflected && !fPVS->StoreReflected()) continue;
 
-        std::map<size_t, int>::const_iterator itstart;
-        std::map<size_t, int>::const_iterator itend;
+        p_map::const_iterator itstart;
+        p_map::const_iterator itend;
         if (Reflected) {
           itstart = ReflDetectedNum.begin();
           itend = ReflDetectedNum.end();
@@ -1486,30 +1498,31 @@ namespace larg4 {
 
   // ---------------------------------------------------------------------------
   void
-  OpFastScintillation::detectedDirectHits(std::map<size_t, int>& DetectedNum,
+  OpFastScintillation::detectedDirectHits(p_map& DetectedNum,
                                           const double Num,
                                           geo::Point_t const& ScintPoint)
   {
-    for (size_t const OpDet : util::counter(NOpChannels)) {
-      if (!isOpDetInSameTPC(ScintPoint, fOpDetCenter.at(OpDet))) continue;
+    tbb::parallel_for(static_cast<std::size_t>(0),static_cast<std::size_t>(NOpChannels),
+                      [&](size_t& OpDet)
+    {
+      // tbb::parallel_for(tbb::blocked_range<size_t>(0, NOpChannels, NOpChannels/4),
+      //                   [&](tbb::blocked_range<size_t> r){
+      //                     for (size_t OpDet=r.begin(); OpDet<r.end(); ++OpDet){
 
-      fydimension = fOpDetHeight.at(OpDet);
-      fzdimension = fOpDetLength.at(OpDet);
-      // set detector struct for solid angle function
-      detPoint.h = fydimension;
-      detPoint.w = fzdimension;
-      int const DetThis = VUVHits(Num, ScintPoint, fOpDetCenter[OpDet], fOpDetType[OpDet]);
-      if (DetThis > 0) {
-        DetectedNum[OpDet] = DetThis;
-        //   mf::LogInfo("OpFastScintillation") << "FastScint: " <<
-        //   //   it->second<<" " << Num << " " << DetThisPMT;
-        //det_photon_ctr += DetThisPMT; // CASE-DEBUG DO NOT REMOVE THIS COMMENT
+      if(isOpDetInSameTPC(ScintPoint, fOpDetCenter.at(OpDet))){
+        const int DetThis = VUVHits(Num, ScintPoint, fOpDetCenter[OpDet], fOpDetType[OpDet]);
+        if (DetThis > 0) {
+          p_map::accessor ac;
+          DetectedNum.insert(ac, OpDet);
+          ac->second = DetThis;
+          ac.release();
+        }
       }
-    }
+    }); // tbb::parallel_for()
   }
 
   void
-  OpFastScintillation::detectedReflecHits(std::map<size_t, int>& ReflDetectedNum,
+  OpFastScintillation::detectedReflecHits(p_map& ReflDetectedNum,
                                           const double Num,
                                           geo::Point_t const& ScintPoint)
   {
@@ -1547,13 +1560,24 @@ namespace larg4 {
     const double cathode_hits_rec = GH_correction * cathode_hits_geo;
     const std::array<double, 3> hotspot = {plane_depth, ScintPoint.Y(), ScintPoint.Z()};
 
-    for (size_t const OpDet : util::counter(NOpChannels)) {
-      if (!isOpDetInSameTPC(ScintPoint, fOpDetCenter.at(OpDet))) continue;
+    tbb::parallel_for(static_cast<std::size_t>(0), static_cast<std::size_t>(NOpChannels),
+                      [&](size_t& OpDet)
+    {
+      // tbb::parallel_for(tbb::blocked_range<size_t>(0, NOpChannels, NOpChannels/4),
+      //                   [&](tbb::blocked_range<size_t> r){
+      //                     for (size_t OpDet=r.begin(); OpDet<r.end(); ++OpDet){
 
-      int const ReflDetThis =
-        VISHits(ScintPoint, fOpDetCenter[OpDet], fOpDetType[OpDet], cathode_hits_rec, hotspot);
-      if (ReflDetThis > 0) { ReflDetectedNum[OpDet] = ReflDetThis; }
-    }
+      if(isOpDetInSameTPC(ScintPoint, fOpDetCenter.at(OpDet))){
+        const int ReflDetThis =
+          VISHits(ScintPoint, fOpDetCenter[OpDet], fOpDetType[OpDet], cathode_hits_rec, hotspot);
+        if (ReflDetThis > 0) {
+          p_map::accessor ac;
+          ReflDetectedNum.insert(ac, OpDet);
+          ac->second = ReflDetThis;
+          ac.release();
+        }
+      }
+    }); // tbb::parallel_for()
   }
 
   // VUV semi-analytic hits calculation

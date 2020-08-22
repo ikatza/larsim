@@ -102,6 +102,10 @@
 
 #include <memory> // std::unique_ptr
 
+#include "tbb/tbb.h"
+#include "tbb/concurrent_hash_map.h"
+typedef tbb::concurrent_hash_map<size_t, int> p_map;
+
 class G4EmSaturation;
 class G4Step;
 class G4Track;
@@ -288,10 +292,10 @@ namespace larg4 {
     /// Returns whether the semi-analytic visibility parametrization is being used.
     bool usesSemiAnalyticModel() const;
 
-    void detectedDirectHits(std::map<size_t, int>& DetectedNum,
+    void detectedDirectHits(p_map& DetectedNum,
                             const double Num,
                             geo::Point_t const& ScintPoint);
-    void detectedReflecHits(std::map<size_t, int>& ReflDetectedNum,
+    void detectedReflecHits(p_map& ReflDetectedNum,
                             const double Num,
                             geo::Point_t const& ScintPoint);
 
@@ -393,7 +397,7 @@ namespace larg4 {
 
     // Optical detector properties for semi-analytic hits
     // int foptical_detector_type;  // unused
-    double fydimension, fzdimension, fradius;
+    double fradius;
     dims detPoint, cathode_plane;
     int fdelta_angulo, fL_abs_vuv;
     std::vector<geo::Point_t> fOpDetCenter;
